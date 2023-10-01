@@ -1,0 +1,776 @@
+---
+title: "ScreenPassTrend"
+output: html_document
+date: "2023-09-15"
+---
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(caret)
+```
+
+
+```{r}
+data2023 <- nflreadr::load_pbp(2023) 
+ftndata2023 <- nflreadr::load_ftn_charting(2023)
+
+data2022 <- nflreadr::load_pbp(2022) 
+ftndata2022 <- nflreadr::load_ftn_charting(2022)
+
+teams = load_teams()
+```
+
+How to join? 
+```{r}
+range(data2023$play_id)
+
+range(ftndata2023$nflverse_play_id)
+
+data2023 %>%
+  filter(play_id < 39) %>%
+  select(game_seconds_remaining) %>%
+  range()
+
+
+#Filter out "no plays"
+data2022$no_play = ifelse(str_detect(data2022$desc, "No Play"), 1, 0)
+data2023$no_play = ifelse(str_detect(data2023$desc, "No Play"), 1, 0)
+```
+
+Ranges are close for play_ids, but not exact. Looking more into it, there are only 32 total rows that have a play_id less than 39, indicating they are outliers of some sort. Seeing their range, its all the first rows of each game, which is probably just the initial kickoff
+
+```{r}
+screen_passes_2023 = 
+  data2023 %>%
+  #filter only for weeks 1-3 
+  filter(week %in% c(1:3)) %>%
+  left_join(ftndata2023, by = c("game_id" = "nflverse_game_id", "play_id" = "nflverse_play_id")) %>%
+  #filter out plays where offensive team committed a penalty (no play)
+  filter(!(!is.na(penalty_team) & (penalty_team == posteam))) %>%
+  filter(no_play == 0) %>%
+  #filter only for screen passes
+  filter(is_screen_pass == TRUE) %>%
+  select(game_id, week.x, posteam, defteam, penalty_team,
+         qtr, quarter_seconds_remaining, down, ydstogo, ydsnet, yardline_100, 
+         desc, 
+         yards_gained, starting_hash, pass_location, shotgun, air_yards, yards_after_catch, 
+         posteam_score, defteam_score, 
+         passer_player_name, receiver_player_name,
+         td_prob, ep, epa, total_home_epa, total_away_epa, wp, def_wp, wpa, 
+         solo_tackle, pass_attempt, touchdown, complete_pass, 
+         cp, cpoe, series_success, 
+         series_result, drive_start_yard_line, drive_end_yard_line, aborted_play, success, 
+         qb_epa, xyac_epa, xyac_mean_yardage,
+         n_blitzers, n_pass_rushers, n_defense_box
+         )
+
+screen_passes_2022 = 
+  data2022 %>%
+  left_join(ftndata2022, by = c("game_id" = "nflverse_game_id", "play_id" = "nflverse_play_id")) %>%
+  #filter out plays where offensive team committed a penalty (no play)
+  filter(!(!is.na(penalty_team) & (penalty_team == posteam))) %>%
+  filter(no_play == 0) %>%
+  filter(is_screen_pass == TRUE) %>%
+  select(game_id, week.x, posteam, defteam, penalty_team,
+         qtr, quarter_seconds_remaining, down, ydstogo, ydsnet, yardline_100, 
+         desc, 
+         yards_gained, starting_hash, pass_location, shotgun, air_yards, yards_after_catch, 
+         posteam_score, defteam_score, 
+         passer_player_name, receiver_player_name,
+         td_prob, ep, epa, total_home_epa, total_away_epa, wp, def_wp, wpa, 
+         solo_tackle, pass_attempt, touchdown, complete_pass, 
+         cp, cpoe, series_success, 
+         series_result, drive_start_yard_line, drive_end_yard_line, aborted_play, success, 
+         qb_epa, xyac_epa, xyac_mean_yardage,
+         n_blitzers, n_pass_rushers, n_defense_box) %>%
+  mutate(yards_gained = coalesce(yards_gained, 0))
+
+screen_passes_2023_w1 = 
+  screen_passes_2023 %>%
+  filter(week.x == 1)
+
+screen_passes_2023_w2 = 
+  screen_passes_2022 %>%
+  filter(week.x == 2)
+
+screen_passes_2022_w1 = 
+  screen_passes_2022 %>%
+  filter(week.x == 1)
+```
+
+
+```{r}
+ggplot(screen_passes_2023, aes(x = yards_gained)) +
+  geom_histogram() + 
+  labs(title = "Screen Passes Yards Gained 2023",
+       subtitle = "Week 1, 2, 3 Data")
+
+ggplot(screen_passes_2023_w1, aes(x = yards_gained)) +
+  geom_histogram() + 
+  labs(title = "Screen Passes Yards Gained 2023",
+       subtitle = "Week 1 Data")
+
+ggplot(screen_passes_2022, aes(x = yards_gained)) +
+  geom_histogram() + 
+  labs(title = "Screen Passes Yards Gained 2022",
+       subtitle = "All weeks Data")
+
+ggplot(screen_passes_2022_w1, aes(x = yards_gained)) +
+  geom_histogram() + 
+  labs(title = "Screen Passes Yards Gained 2022",
+       subtitle = "Week 1 Data")
+
+
+screen_passes_2023 %>%
+  group_by(yards_gained) %>%
+  count()
+```
+
+```{r}
+screen_passes_2023$year = 2023
+screen_passes_2022$year = 2022
+screen_passes_22_23 = rbind(screen_passes_2023, screen_passes_2022)
+screen_passes_22_23$year = as.factor(screen_passes_22_23$year)
+
+ggplot(screen_passes_22_23, aes(x = yards_gained, fill = year)) +
+  geom_density(alpha = 0.3) + 
+  geom_vline(xintercept = 3, linetype = 'dashed', alpha = 0.5) +
+  geom_vline(xintercept = 6, linetype = 'dashed', alpha = 0.5) +
+  labs(title = "Screen Passes Yards Gained 2023 vs Weeks 1 and 2 of 2022",
+      subtitle = "After a peak at the 0 yards, graph flatlines at the 3-6 yard mark, followed by a steep fall off",
+      x = "Yards Gained",
+      y = "Density",
+      caption = "Data: @nflfastR") + 
+  theme_bw()
+
+ggsave("screenpasses_2022v2023_density.png")
+```
+
+
+
+```{r}
+test = 
+  data2022 %>%
+  left_join(ftndata2022, by = c("game_id" = "nflverse_game_id", "play_id" = "nflverse_play_id")) %>%
+  filter(play_type %in% c('pass', 'run')) %>%
+  filter(!is.na(is_screen_pass)) %>%
+  filter(yards_gained < 40)
+
+
+ggplot(test, aes(x = yards_gained, fill = is_screen_pass)) +
+  geom_density(alpha = 0.3) + 
+  labs(title = "All plays vs Screen Passes Yards Gained 2022",
+      subtitle = "Screen passesdo have a general higher yards gained average, especially to the 10-15 range, 
+      but also have a higher negative probability, just like a run.",
+      x = "Yards Gained",
+      y = "Density",
+      caption = "Data: @nflfastR") + 
+  theme_bw()
+
+ggplot(test, aes(x = yards_gained, fill = play_type)) +
+  geom_density(alpha = 0.3) + 
+  labs(title = "Run vs Pass Yards Gained Density 2022",
+      subtitle = "Runs have a normal distribution centered around 2-4 yards, 
+      while passes have a bimodal distribution at 0 and about 5",
+      x = "Yards Gained",
+      y = "Density",
+      caption = "Data: @nflfastR") + 
+  theme_bw()
+
+
+test$play_type_2 = 
+  ifelse(test$is_screen_pass == TRUE, "screen_pass",
+         ifelse(test$play_type == "pass", "pass, non-screen", "run"))
+
+ggplot(test, aes(x = yards_gained, fill = play_type_2)) +
+  geom_density(alpha = 0.3) + 
+  labs(title = "Run vs Screen Pass vs Other Passes, Yards Gained Density 2022",
+      subtitle = "Runs have a normal distribution centered around 2-4 yards, 
+      while passes have a bimodal distribution at 0 and about 5.
+      Screen passes find a middle.",
+      x = "Yards Gained",
+      y = "Density",
+      caption = "Data: @nflfastR") + 
+  theme_bw() + 
+  guides(fill=guide_legend(title="Play Type"))
+
+ggsave("screenpasses_pass_run_2022density.png")
+
+ggplot(test, aes(x = epa, fill = play_type_2)) +
+  geom_density(alpha = 0.3) + 
+  labs(title = "Run vs Screen Pass vs Other Passes, Expected Points Added Density 2022",
+      subtitle = "All are relatively normal, with screen passes in the middle between run and screen_pass.
+      Non-Screen Passes have the higher potential for cp at the 2-4 range, the big play range.",
+      x = "Expected Points Added",
+      y = "Density",
+      caption = "Data: @nflfastR") + 
+  theme_bw() + 
+  guides(fill=guide_legend(title="Play Type"))
+  
+
+```
+
+
+```{r}
+mean(screen_passes_2023$yards_gained)
+mean(screen_passes_2023_w1$yards_gained)
+
+
+mean(screen_passes_2022$yards_gained, na.rm = T)
+mean(screen_passes_2022_w1$yards_gained)
+```
+
+Seems like week 1 of 2023 had a lower average than the 2022 season at 4.9 yards (0.2 yards), and an even lower average for week 1 of 2022 at 5.7 yards (0.7 yards). Week 2 rebounded, and raised the average back too 
+
+```{r}
+wilcox.test(screen_passes_2023$yards_gained, screen_passes_2022$yards_gained)
+wilcox.test(screen_passes_2023_w1$yards_gained, screen_passes_2022_w1$yards_gained)
+```
+
+The difference is not significant to any degree. Let's look at the screen passes that went for negative yards 
+
+```{r}
+sum(screen_passes_2023$yards_gained < 0) / length(screen_passes_2023$yards_gained)
+sum(screen_passes_2022$yards_gained < 0, na.rm = TRUE) / length(screen_passes_2022$yards_gained)
+sum(screen_passes_2022_w1$yards_gained < 0, na.rm = TRUE) / length(screen_passes_2022_w1$yards_gained)
+
+```
+
+Compared to all the screen passes of 2022, the first week of 2023 had about 5% more screen passes go for negative yards
+
+```{r}
+screen_passes_2022 %>%
+  group_by(posteam) %>%
+  summarise(
+    num_screens = n(), 
+    yds = mean(yards_gained)) %>%
+  arrange(-yds)
+
+screen_passes_2022 %>%
+  group_by(passer_player_name) %>%
+  summarise(
+    num_screens = n(), 
+    yds = mean(yards_gained)) %>%
+  filter(num_screens > 5) %>%
+  arrange(-yds)
+
+screen_passes_2022 %>%
+  group_by(receiver_player_name) %>%
+  summarise(
+    num_screens = n(), 
+    yds = mean(yards_gained)) %>%
+  filter(num_screens > 5) %>%
+  arrange(-yds)
+
+
+screen_passes_2022 %>%
+  group_by(defteam) %>%
+  summarise(
+    num_screens = n(), 
+    yds = mean(yards_gained)) %>%
+  arrange(-yds)
+
+```
+Every team ranged from about 3.7 yards to 6.6 yards per screen pass outside of 3 teams.
+
+Tennessee were extraordinarily good at 8.46 yards per screen, but only ran it 48 times, compared to the 60-70 average
+
+Seattle and the New York Jets were all the lowest, at 3.3 and 2.7. 
+
+Pittsburgh was great at defending the screen, with a 1.7 average yards per screen, about 1.4 yards lower than the next team, and teams knew it with only 29 screens run against them, 8 fewer than the next team
+
+```{r}
+off_screenpasses = screen_passes_2023 %>%
+  group_by(posteam) %>%
+  summarise(
+    num_screens = n(), 
+    yds = mean(yards_gained)) %>%
+  left_join(
+    teams,
+    by = c('posteam' = 'team_abbr')
+  )
+ggplot(off_screenpasses, aes(reorder(posteam, yds), yds)) + 
+  geom_bar(fill = teams$team_color,
+    stat = "identity") + 
+  geom_nfl_logos(aes(team_abbr = posteam), width = 0.03, alpha = 1) + 
+  labs(
+    title = "2023 Average Screen Pass Yardage",
+      subtitle = "Data: Week 1-3",
+    x = "Team",
+    y = "Average Screen Pass Yards Gained",
+    caption = "Data: @nflfastR"
+  ) + 
+  theme_classic() + 
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  ) +
+  coord_flip()
+
+ggsave("screenpasses_team.png")
+```
+```{r}
+def_screenpasses = screen_passes_2023 %>%
+  group_by(defteam) %>%
+  summarise(
+    num_screens = n(), 
+    yds = mean(yards_gained)) %>%
+  arrange(yds) %>%
+  left_join(
+    teams,
+    by = c('defteam' = 'team_abbr')
+  )
+ggplot(def_screenpasses, aes(reorder(defteam, -yds), yds)) + 
+  geom_bar(fill = def_screenpasses$team_color,
+    stat = "identity") + 
+  geom_nfl_logos(aes(team_abbr = defteam), width = 0.03, alpha = 1) + 
+  labs(
+    title = "2023 Defensive Average Screen Pass Yardage",
+      subtitle = "Data: Week 1-3,
+    New England has only had 4 run against them, lowest by 2. 
+    Denver is tied for the most run against them, at 17",
+    x = "Team",
+    y = "Average Screen Pass Yards Given",
+    caption = "Data: @nflfastR"
+  ) + 
+  theme_classic() + 
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  ) +
+  coord_flip()
+
+ggsave("screenpasses_team_def.png")
+```
+
+
+
+```{r}
+screen_passes_2023 %>%
+  group_by(passer_player_name) %>%
+  summarise(
+    num_screens = n(), 
+    yds = mean(yards_gained)) %>%
+  filter(num_screens > 1) %>%
+  arrange(-yds)
+
+screen_passes_2023 %>%
+  group_by(receiver_player_name) %>%
+  summarise(
+    num_screens = n(), 
+    yds = mean(yards_gained)) %>%
+  filter(num_screens > 1) %>%
+  arrange(-yds)
+```
+
+And at the start of this year, Tennesee is still at the top at 14 yards per screen. While the Jets has managed to turn it around, Seattle remains at the bottom, as the only team this season to average negative yards, with their biggest at 2 yards.
+
+
+Lets check via some other game variables such as quarter, down, yards to go, etc via yards gained, and also EPA (Expected Points Added)
+
+```{r}
+screen_passes_2022 %>%
+  group_by(qtr) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+screen_passes_2022 %>%
+  group_by(down) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+screen_passes_2022 %>%
+  group_by(ydstogo) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+## group into 1-3, 4-6, 7-9, 10, 11-15, 16-29
+
+breaks <- c(1, 3, 6, 9, 10, 15, 29, Inf)
+labels <- c("Short", "Medium", "Long", "Start", "Start_plus_short", "Start_plus_long", "NA")
+screen_passes_2022$ydstogo_group <- cut(screen_passes_2022$ydstogo, breaks = breaks, labels = labels, include.lowest = TRUE)
+
+screen_passes_2022 %>%
+  group_by(ydstogo_group) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+screen_passes_2022 %>%
+  group_by(down, ydstogo_group) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  ) %>%
+  filter(count > 50) %>%
+  arrange(-epa)
+  
+
+screen_passes_2022 %>%
+  group_by(air_yards) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  ) %>%
+  filter(count > 50) %>%
+  ggplot(aes(x = air_yards, y = epa)) +
+  geom_bar(stat = "identity")
+```
+
+- Quarter did not really matter, but Q2 had a closer to 0 compared to quarters 1, 3, and 4
+--- Actually higher that the average EPA for all plays
+- 2nd down was considerably higher, at 0.01 compared to -0.08
+- Medium down (4-6 yards to go) plays, had the highest EPA, next being 11-15 yards to go (+0.03 vs -0.02)
+- Any second down scenario, but specifically 2nd and anything more than 4, were extremely beneficial compared to the rest, at the only positive rates. 
+- shorter air yard screens (1-2 yards) were generally better, but not by much, especially considering screens with 0 air yards were as bad as the rest
+- Screen passes most frequently happen between the opponents 40 and the redzone, but are less ineffective EPA wise when its past their own 40 yard line.
+
+
+EPA understanding and reference
+https://www.fantasylife.com/articles/redraft/what-is-epa-in-fantasy-football-and-sports-betting#:~:text=Expected%20points%20(EP)%20are%20values,one%20play%20to%20the%20next.
+```{r}
+mean(screen_passes_2022$epa, na.rm = T)
+mean(data2022$epa, na.rm = T)
+```
+
+
+
+Now lets look into the play's positioning 
+- QB's stance (shotgun or not)
+- Hash vs pass location (same or different or middle)
+
+```{r}
+screen_passes_2022 %>%
+  group_by(shotgun) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+screen_passes_2022 %>%
+  group_by(starting_hash) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+screen_passes_2022$starting_hash = ifelse(screen_passes_2022$starting_hash == "L", "left", 
+                                          ifelse(screen_passes_2022$starting_hash == "R", "right", "middle"))
+
+
+screen_passes_2022$net_direction =
+  ifelse((is.na(screen_passes_2022$starting_hash) | is.na(screen_passes_2022$pass_location)), "same_side",
+         ifelse(screen_passes_2022$starting_hash == "middle", "middle_side",
+                ifelse(screen_passes_2022$starting_hash == screen_passes_2022$pass_location, "same_side", "opposite_side")))
+
+screen_passes_2022 %>%
+  group_by(net_direction) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+
+## group by 20s
+
+breaks <- c(1, 20, 40, 60, 80, 100)
+labels <- c("OwnEndzone", "OwnMid", "Midfield", "OppMid", "Redzone")
+screen_passes_2022$area_of_field <- cut(screen_passes_2022$yardline_100, breaks = breaks, labels = labels, include.lowest = TRUE)
+
+
+screen_passes_2022 %>%
+  group_by(area_of_field) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  ) %>%
+  mutate(pos = epa >= 0) %>%
+  ggplot(aes(area_of_field, epa, fill = pos)) + 
+  geom_bar(stat = "identity", color = "black") + 
+  geom_text(aes(label = paste0(round(epa, 2), ", ", count)), vjust = 1.2) + 
+  theme_bw() + 
+  labs(
+    title = "2022 Screen Passes by Area of Field",
+      subtitle = "Bars labeled 'EPA, Num Screens Ran',
+    OwnMid (20-40 yardline) showed to be the only positive EPA on average,
+    but was ran the most on the OppMid (40-20 opponent yardline)",
+    x = "Area of Field",
+    y = "Expected Points Added",
+    caption = "Data: @nflfastR"
+  ) + 
+  scale_fill_manual(values = c("#FFDDDD", "#D1FFBD"), guide = FALSE)
+
+ggsave("screenpasses_area_of_field.png")
+  
+```
+
+- Most screen passes were run in shotgun, so even though there was a higher yardage for non-shotgun, sample size is relatively insignificant
+- most screen passes were ran from opposite sides, so if the ball started near or at the left hash, the screen was ran to the right (nearly 60% of all screen passes, as opposite to the same side being only about 30%) 
+---- yardage was relatively similar, with same_side being higher by about 0.45 yards, and +0.04 epa
+
+
+Now lets look at the situation
+- whether the team is winning
+- Win Probability
+
+```{r}
+screen_passes_2022$score_diff = ifelse(screen_passes_2022$posteam_score - screen_passes_2022$defteam_score > 0, 1,
+                                       ifelse(screen_passes_2022$posteam_score - screen_passes_2022$defteam_score < 0, -1, 0))
+
+screen_passes_2022 %>%
+  group_by(score_diff) %>%
+  summarise(
+    count = n(),
+    mean(yards_gained),
+    mean(epa)
+  )
+
+ggplot(screen_passes_2022, aes(wp, yards_gained)) + 
+  geom_point()
+
+screen_passes_2022$wp_grouped =
+  ifelse(screen_passes_2022$wp > 0.75, 4,
+         ifelse(screen_passes_2022$wp > 0.5, 3,
+                ifelse(screen_passes_2022$wp > 0.25, 2, 1)))
+
+screen_passes_2022 %>%
+  group_by(wp_grouped) %>%
+  summarise(
+    count = n(),
+    mean(yards_gained),
+    mean(epa)
+  )
+```
+
+We see a team losing run it more (50% more) often than a team winning, but in both scenarios, the EPA is lower than -0.1. 
+
+
+Win probability a bit of a mess, but we see a decent amount of big plays come from teams either between 0 and 0.25 or 0.5 and 0.75
+
+
+
+Now lets look at defensive stats from FTN
+```{r}
+screen_passes_2022
+
+
+screen_passes_2022 %>%
+  group_by(n_blitzers) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+screen_passes_2022 %>%
+  group_by(n_pass_rushers) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+screen_passes_2022 %>%
+  group_by(n_defense_box) %>%
+  summarise(
+    count = n(),
+    yds = mean(yards_gained),
+    epa = mean(epa)
+  ) %>%
+  filter(count > 50) %>%
+  ggplot(aes(n_defense_box, epa)) +
+  geom_point()
+
+```
+
+
+
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------
+
+
+Run a logistic regressn with screen pass features as above, and use the success metric that tells us whether a positive epa is made
+
+```{r}
+# For Logistic regression
+library(caTools)
+# For ROC curve to evaluate model
+library(ROCR)
+```
+
+Feature Cleaning
+```{r}
+screen_passes_2022$air_yards[is.na(screen_passes_2022$air_yards)] <- 0
+
+model_features = screen_passes_2022 %>%
+  select(qtr, down, ydstogo, ydstogo_group, yardline_100, area_of_field, shotgun, air_yards, net_direction, score_diff, n_pass_rushers, n_defense_box, success)
+
+##convert certain features to factor (such as quarter, down)
+
+model_features$qtr = as.factor(model_features$qtr)
+model_features$down = as.factor(model_features$down)
+model_features$success = as.factor(model_features$success)
+
+```
+
+
+```{r}
+mean(screen_passes_2022$success)
+```
+
+
+40% of screen passes are considered successful, for the train lets balance it so its 50/50
+
+
+```{r}
+# Splitting dataset
+set.seed(502)
+spec = c(train = .6, test = .2, validate = .2)
+
+g = sample(cut(
+  seq(nrow(model_features)), 
+  nrow(model_features)*cumsum(c(0,spec)),
+  labels = names(spec)
+))
+
+model_features$split = g
+
+train = model_features[model_features$split == "train", ] %>% select(-split)
+traindown = downSample(x=train[,-ncol(train)], y=train$success) 
+traindown$success = traindown$Class
+traindown = traindown %>% select(-Class)
+
+val = model_features[model_features$split == "validate", ] %>% select(-split)
+test = model_features[model_features$split == "test", ] %>% select(-split)
+
+# Training model
+logistic_model_initial <- glm(success ~ .,
+                    data = traindown,
+                    family = "binomial")
+logistic_model_initial
+ 
+# Summary
+summary(logistic_model_initial)
+```
+
+Select only down, ydstogo, airyards 
+```{r}
+train$down3 = ifelse(train$down == 3, 1, 0)
+val$down3 = ifelse(val$down == 3, 1, 0)
+test$down3 = ifelse(test$down == 3, 1, 0)
+
+train$area_of_fieldOwnMid = ifelse(train$area_of_field == "OwnMid", 1, 0)
+val$area_of_fieldOwnMid = ifelse(val$area_of_field == "OwnMid", 1, 0)
+test$area_of_fieldOwnMid = ifelse(test$area_of_field == "OwnMid", 1, 0)
+
+train$down2_less10 = ifelse(((train$down == 2) & train$ydstogo < 10), 1, 0)
+val$down2_less10 = ifelse(((val$down == 2) & val$ydstogo < 10), 1, 0)
+test$down2_less10 = ifelse(((test$down == 2) & test$ydstogo < 10), 1, 0)
+
+
+# Training model
+logistic_model <- glm(success ~ down3 + ydstogo_big + air_yards + area_of_fieldOwnMid,
+                    data = train,
+                    family = "binomial")
+ 
+# Summary
+summary(logistic_model)
+```
+
+Use validation set to tune parameters 
+```{r}
+predict_reg <- predict(logistic_model,
+                       val, type = "response")
+```
+
+```{r}
+vals = seq(0.1, 0.8, 0.05)
+for (i in vals) {
+  # Changing probabilities
+  predict_bin <- ifelse(predict_reg > i, 1, 0)
+  val$success_pred = predict_bin
+  
+  #calculate accuracy 
+  missing_classerr <- mean(predict_bin != val$success)
+  print(i)
+  print(1 - missing_classerr)
+}
+```
+
+```{r}
+# ROC-AUC Curve
+ROCPred <- prediction(predict_reg, val$success)
+ROCPer <- performance(ROCPred, measure = "tpr",
+                      x.measure = "fpr")
+ 
+auc <- performance(ROCPred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+ 
+# Plotting curve
+plot(ROCPer)
+plot(ROCPer, colorize = TRUE,
+     print.cutoffs.at = seq(0.1, by = 0.1),
+     main = "ROC CURVE")
+abline(a = 0, b = 1)
+ 
+auc <- round(auc, 4)
+legend(.6, .4, auc, title = "AUC", cex = 1)
+```
+
+
+
+Get final prediction accuracy 
+
+```{r}
+predict_reg <- predict(logistic_model,
+                       test, type = "response")
+# Evaluating model accuracy
+predict_bin <- ifelse(predict_reg > 0.5, 1, 0)
+test$success_pred = predict_bin
+missing_classerr <- mean(predict_bin != test$success)
+print(1-missing_classerr)
+
+# using confusion matrix 
+test$success_prob = predict_reg
+test$success_pred = predict_bin
+table(test$success, predict_bin)
+
+```
+Lets check some out via film
+```{r}
+screen_passes_2022$split = g
+
+screen_passes_2022 %>%
+  filter(split == "test") %>%
+  mutate(success_prob = test$success_prob) %>%
+  arrange(-yards_gained)
+```
+Denver vs Kansas City Week 14 2022- Marlon Mack's 66 yard screen pass to the house, mostly because of Kansas City's heavy blitz, had them out of position, and a couple missed tackles later, was in the endzone. The model predicts a success here of only 33%, mainly because of the amount of air yards (5). Given some tracking data, we could use some advanced features, such as players between reciever and endzone
+
+
+Tennessee vs Kansas City, Week 9 2022 - Okonkwo runs for a 48 yard screen pass. After a cluster a couple yards in, Chig breaks a couple tackles and outruns the safeties for about 40 additional yards. Chig's abilities to break tackles and with the 4-6 blockers out in front when he gets the ball, it opens up the breakout potential.
+
+

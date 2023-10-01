@@ -67,6 +67,15 @@ qbs %>%
 ```{r}
 knitr::kable(nflreadr::dictionary_ftn_charting)
 knitr::kable(nflreadr::dictionary_pbp)
+```
 
+
+
+```{r}
+ftndata2022 <- nflreadr::load_ftn_charting(2022)
+
+ftndata2022 %>% 
+  ggplot(aes(n_blitzers, n_pass_rushers)) + 
+  geom_point()
 ```
 
