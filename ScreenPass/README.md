@@ -10,7 +10,7 @@ About 10% of screen passes go for no yards
 However, after the “no-gain” area, it's a equivalent likelihood from 2-7 yards.
 A screen pass, as a density, fits right in between the normal-ness of a run, and the highly skewed pass.
 
-[screenpasses_2022v2023_density.png]
+![test](https://github.com/rajrdasani/NFL_PlayByPlay/blob/main/ScreenPass/screenpasses_2022v2023_density.png)
 [screenpasses_pass_run_2022density.png]
 
 
