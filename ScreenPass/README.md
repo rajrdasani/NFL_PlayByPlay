@@ -10,8 +10,8 @@ About 10% of screen passes go for no yards
 However, after the “no-gain” area, it's a equivalent likelihood from 2-7 yards.
 A screen pass, as a density, fits right in between the normal-ness of a run, and the highly skewed pass.
 
-![test](https://github.com/rajrdasani/NFL_PlayByPlay/blob/main/ScreenPass/screenpasses_2022v2023_density.png)
-[screenpasses_pass_run_2022density.png]
+![Screen Pass Density 2022 vs 2023](https://github.com/rajrdasani/NFL_PlayByPlay/blob/main/ScreenPass/screenpasses_2022v2023_density.png)
+![Screen Pass vs Pass vs Run 2022](https://github.com/rajrdasani/NFL_PlayByPlay/blob/main/ScreenPass/screenpasses_pass_run_2022density.png)
 
 
 Looking at it through teams, in the 2022 season 2 teams stood out:
@@ -21,26 +21,26 @@ Looking at it through teams, in the 2022 season 2 teams stood out:
 
 Through 3 weeks, 2023 shows the Titans still near the top, and the Jets have turned it around, with the Giants averaging negative yards per screen so far. 
 
-[screenpasses_team.png]
+![2023 Screen Pass Success via Team](https://github.com/rajrdasani/NFL_PlayByPlay/blob/main/ScreenPass/screenpasses_team.png)
 
 
 Defensively, last year Pittsburgh was great at the screen, with 1.7 yards given per screen, 1.4 yards lower than the next team, but teams did not run it against them (only 29, 8 fewer than the next).
 
 In 2023, Dallas reigns supreme, with 8 screens at < 1 yard per screen given.
 
-[screenpasses_team_def.png]
+![screenpasses_team_def.png](https://github.com/rajrdasani/NFL_PlayByPlay/blob/main/ScreenPass/screenpasses_team_def.png)
 
 Checking out some other variables for 2022, screens showed to be especially ineffective on 3rd down, via yards gained and expected points added (5.0 and -0.35 respectively). Additionally, it was more effective when ran in 2nd and 10-15 situations, with an average of 7.5 yards gained, and a 0.24 EPA.
 
 Situations with at least 50 occurrences:
 
-[screenpasses_down_ydstogo.png]
+![screenpasses_down_ydstogo.png](https://github.com/rajrdasani/NFL_PlayByPlay/blob/main/ScreenPass/screenpasses_down_ydstogo.png)
 
 Location wise, most screen passes were ran from opposite sides, so if the ball started near or at the left hash, the screen was ran to the right (nearly 60% of all screen passes, as opposite to the same side being only about 30%), but it showed to be as effective as same side screens. 
 
 Location did matter with where the team ran it area of the field wise, where it was significantly more effective from a team’s own 20-40 (0.06 epa), then it is on the opponents 40-20 (-0.12 epa).
 
-[screenpasses_area_of_field.png]
+![screenpasses_area_of_field.png](https://github.com/rajrdasani/NFL_PlayByPlay/blob/main/ScreenPass/screenpasses_area_of_field.png)
 
 The most relevant feature came with air yards, where the data shows a quick 1-2 (technically -1 and -2, yard dump off were significantly more effective than another. With both having EPAs of around 0.1 and 6 yards per screen, compared to more negative air yards (-3 to -6, at about -0.1).
 
