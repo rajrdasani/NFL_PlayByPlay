@@ -1,0 +1,387 @@
+---
+title: "BengalsStruggles"
+output: html_document
+date: "2023-10-04"
+---
+
+```{r}
+library(tidyverse)
+library(ggrepel)
+library(nflreadr)
+library(nflplotR)
+```
+
+```{r}
+data2022 <- nflreadr::load_pbp(2022) 
+ftndata2022 <- nflreadr::load_ftn_charting(2022)
+
+data2023 <- nflreadr::load_pbp(2023) 
+ftndata2023 <- nflreadr::load_ftn_charting(2023)
+```
+
+
+```{r}
+#Filter out "no plays"
+data2022$no_play = ifelse(str_detect(data2022$desc, "No Play"), 1, 0)
+data2023$no_play = ifelse(str_detect(data2023$desc, "No Play"), 1, 0)
+```
+
+```{r}
+data2023 = 
+  data2023 %>%
+  left_join(ftndata2023, by = c("game_id" = "nflverse_game_id", "play_id" = "nflverse_play_id")) %>%
+  #filter for only weeks 1-4
+  filter(week.x %in% c(1:4)) %>%
+  #filter out plays where offensive team committed a penalty (no play)
+  filter(!(!is.na(penalty_team) & (penalty_team == posteam))) %>%
+  filter(no_play == 0) %>%
+  #filter out non-plays 
+  filter(play_type %in% c('pass', 'run'))
+
+data2022 = 
+  data2022 %>%
+  left_join(ftndata2022, by = c("game_id" = "nflverse_game_id", "play_id" = "nflverse_play_id")) %>%
+  #filter for only regular season
+  filter(season_type == "REG") %>%
+  #filter out plays where offensive team committed a penalty (no play)
+  filter(!(!is.na(penalty_team) & (penalty_team == posteam))) %>%
+  filter(no_play == 0) %>%
+  #filter out non-plays 
+  filter(play_type %in% c('pass', 'run'))
+
+```
+
+
+```{r}
+cin_data2023 = 
+  data2023 %>%
+  filter(posteam == "CIN") %>%
+  group_by(shotgun) %>%
+  summarise(
+    count = n(), 
+    perc = n() / nrow(data2023 %>% filter(posteam == "CIN")),
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  ) %>%
+  mutate(year = 2023)
+
+
+
+
+cin_data2022 = 
+  data2022 %>%
+  filter(posteam == "CIN") %>%
+  group_by(shotgun) %>%
+  summarise(
+    count = n(), 
+    perc = n() / nrow(data2022 %>% filter(posteam == "CIN")),
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  ) %>%
+  mutate(year = 2022)
+
+
+data2022 %>%
+  filter(posteam == "CIN") %>%
+  filter(play_type == "run") %>%
+  group_by(shotgun, is_play_action) %>%
+  summarise(
+    count = n(), 
+    perc = n() / nrow(data2022 %>% filter(posteam == "CIN")),
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  ) %>%
+  mutate(year = 2022)
+```
+
+```{r}
+rbind(cin_data2022, cin_data2023) %>%
+  mutate(shotgun = as.factor(shotgun),
+         year = as.factor(year)) %>%
+  ggplot(aes(x = shotgun, y = count, fill = year)) + 
+  geom_bar(stat="identity", position="fill") + 
+  scale_fill_manual(values=c('#FB4F14','#000000')) + 
+  labs(
+    title = "Bengals Plays via Shotgun",
+    y = "Percentage of Plays"
+  ) +
+  theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(), 
+    axis.line = element_line(colour = "black"))
+
+
+cin_data2023[1,5] <- NA
+
+rbind(cin_data2022, cin_data2023) %>%
+  mutate(shotgun = as.factor(shotgun), year = as.factor(year)) %>%
+  ggplot(aes(x = year)) +
+  geom_bar(aes(y = perc, fill = shotgun), stat="identity", position="dodge") + 
+  scale_fill_manual(
+    values=c('#FFD580','#454545')) +
+  geom_point(aes(y = epa+0.2, fill = shotgun, color = factor(epa > 0)), size = 5, shape = 'diamond', position = position_dodge(width = 0.9)) +
+  geom_text(aes(y = epa + 0.2 + 0.07, label = round(epa, 2), group = shotgun, color = factor(epa > 0)), size = 5, position = position_dodge(width = 0.9)) +
+  scale_color_manual(values = c("red", "lightgreen")) +  # Specify red and green colors
+  scale_y_continuous(
+    name = "Percentage of Plays",
+    sec.axis = sec_axis(~.-0.2, name = "EPA")
+  ) +
+  labs(
+    title = "Bengals Plays via Shotgun",
+    subtitle = "With nearly all plays run from shotgun in 2023 (W1-4), Bengals lost their EPA firepower,
+                EPA in non-shotgun 2023 is not shown, with only 2 plays ran"
+  ) +
+  theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank(), 
+    axis.line = element_line(colour = "black")) + 
+  guides(color = FALSE)
+
+ggsave("2023BengalsViaShotgun.png")
+
+```
+
+% Plays Run in Shotgun vs Team EPA
+```{r}
+team_percshotgun_2023 = 
+  data2023 %>%
+  group_by(posteam, shotgun) %>%
+  summarise(
+    count = n(), 
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  ) %>%
+  group_by(posteam) %>%
+  mutate(Proportion = count / sum(count)) %>%
+  select(posteam, shotgun, Proportion) %>%
+  filter(shotgun == 1)
+
+team_epa_2023 = data2023 %>%
+  group_by(posteam) %>%
+  summarise(
+    count = n(), 
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  ) %>%
+  select(posteam, epa)
+
+
+team_percshotgun_2023 %>%
+  left_join(team_epa_2023) %>%
+  ggplot(aes(Proportion, epa)) +
+  geom_point(shape = NA) + 
+  #add points for the QBs with the logos (this uses nflplotR package)
+  geom_nfl_logos(aes(team_abbr = posteam), width = 0.05) + 
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "2023 Plays Ran in Shotgun vs Team Overall EPA",
+    subtitle = "Of the 7 teams who have ran the most shotgun in 2023, 5 significant below 0 EPA",
+    caption = "2023 Data, Data: @nflfastr",
+    x = "Proportion of Plays Ran in Shotgun",
+    y = "Team Overall EPA"
+  ) +
+  theme_classic()
+
+ggsave("2023TeamShotgunVsEPA.png")
+
+```
+
+
+```{r}
+team_percshotgun_2022 = data2022 %>%
+  group_by(posteam, shotgun) %>%
+  summarise(
+    count = n(), 
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  ) %>%
+  group_by(posteam) %>%
+  mutate(Proportion = count / sum(count)) %>%
+  select(posteam, shotgun, Proportion) %>%
+  filter(shotgun == 1)
+
+team_epa_2022 = data2022 %>%
+  group_by(posteam) %>%
+  summarise(
+    count = n(), 
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  ) %>%
+  select(posteam, epa)
+
+
+team_percshotgun_2022 %>%
+  left_join(team_epa_2022) %>%
+  ggplot(aes(Proportion, epa)) +
+  geom_point(shape = NA) + 
+  #add points for the QBs with the logos (this uses nflplotR package)
+  geom_nfl_logos(aes(team_abbr = posteam), width = 0.05) + 
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "2022 Plays Ran in Shotgun vs Team Overall EPA",
+    subtitle = "Of the 9 teams who ran the most shotgun, 7 above 0 EPA including top 4 in the league",
+    caption = "2022 Data, Data: @nflfastr",
+    x = "Proportion of Plays Ran in Shotgun",
+    y = "Team Overall EPA"
+  ) +
+  theme_classic()
+
+ggsave("2022TeamShotgunVsEPA.png")
+
+```
+
+Previous 3 plays
+```{r}
+
+data2022 %>%
+  filter(posteam == "CIN") %>%
+  mutate(
+    lagged_shotgun = ifelse(lag(defteam) != defteam, NA, lag(shotgun)),
+    lagged_yds = ifelse(lag(defteam) != defteam, NA, lag(yards_gained)),
+    lagged_shotgun_2 = ifelse(lag(defteam) != defteam, NA, lag(shotgun, 2)),
+    lagged_yds_2 = ifelse(lag(defteam) != defteam, NA, lag(yards_gained, 2))
+  ) %>%
+  select(game_id, away_team, shotgun, yards_gained, epa, lagged_shotgun, lagged_yds, lagged_shotgun_2, lagged_yds_2) %>%
+  group_by(shotgun, lagged_shotgun, lagged_shotgun_2) %>%
+  summarise(
+    count = n(),
+    yds_gained = mean(yards_gained),
+    epa = mean(epa)
+  ) %>%
+  filter(count > 30) %>%
+  arrange(-epa)
+
+data2022 %>%
+  mutate(
+    lagged_shotgun = ifelse(lag(defteam) != defteam, NA, lag(shotgun)),
+    lagged_yds = ifelse(lag(defteam) != defteam, NA, lag(yards_gained)),
+    lagged_shotgun_2 = ifelse(lag(defteam) != defteam, NA, lag(shotgun, 2)),
+    lagged_yds_2 = ifelse(lag(defteam) != defteam, NA, lag(yards_gained, 2))
+  ) %>%
+  select(game_id, away_team, shotgun, yards_gained, epa, lagged_shotgun, lagged_yds, lagged_shotgun_2, lagged_yds_2) %>%
+  group_by(shotgun, lagged_shotgun, lagged_shotgun_2) %>%
+  summarise(
+    count = n(),
+    yds_gained = mean(yards_gained),
+    epa = mean(epa)
+  ) %>%
+  filter(count > 30) %>%
+  arrange(-epa)
+
+data2022 %>%
+  mutate(
+    lagged_shotgun = ifelse(lag(defteam) != defteam, NA, lag(shotgun)),
+    lagged_yds = ifelse(lag(defteam) != defteam, NA, lag(yards_gained)),
+    lagged_shotgun_2 = ifelse(lag(defteam) != defteam, NA, lag(shotgun, 2)),
+    lagged_yds_2 = ifelse(lag(defteam) != defteam, NA, lag(yards_gained, 2))
+  ) %>%
+  select(game_id, away_team, desc, play_type, shotgun, yards_gained, epa, lagged_shotgun, lagged_yds, lagged_shotgun_2, lagged_yds_2) %>%
+  filter(
+    (shotgun == 0) & (lagged_shotgun == 1) & (lagged_shotgun_2 == 1)
+  ) %>%
+  arrange(-epa) %>%
+  ggplot(aes(epa, color = play_type)) +
+  geom_density() + 
+  geom_vline(xintercept = 0) +
+  theme_classic()
+  
+  
+data2022 %>%
+ mutate(
+    lagged_shotgun = ifelse(lag(defteam) != defteam, NA, lag(shotgun)),
+    lagged_yds = ifelse(lag(defteam) != defteam, NA, lag(yards_gained)),
+    lagged_shotgun_2 = ifelse(lag(defteam) != defteam, NA, lag(shotgun, 2)),
+    lagged_yds_2 = ifelse(lag(defteam) != defteam, NA, lag(yards_gained, 2)),
+    lagged_shotgun_3 = ifelse(lag(defteam) != defteam, NA, lag(shotgun, 3)),
+    lagged_yds_3 = ifelse(lag(defteam) != defteam, NA, lag(yards_gained, 3))
+  ) %>%
+  select(game_id, away_team, desc, play_type, shotgun, yards_gained, epa, lagged_shotgun, lagged_yds, lagged_shotgun_2, lagged_yds_2, lagged_shotgun_3, lagged_yds_3) %>%
+  #create category for non-shotgun play mixed into last 3 plays
+  mutate(
+    non_shotgun_last3 = as.factor(ifelse(((lagged_shotgun_3 == 0) | (lagged_shotgun == 0) | (lagged_shotgun_2 == 0)), 1, 0))
+  ) %>%
+  group_by(non_shotgun_last3) %>%
+  summarise(
+    count = n(),
+    std_epa = sd(epa),
+    yds_gained = mean(yards_gained),
+    epa = mean(epa)
+  )
+
+data2022 %>%
+  mutate(
+    lagged_shotgun = ifelse(lag(defteam) != defteam, NA, lag(shotgun)),
+    lagged_yds = ifelse(lag(defteam) != defteam, NA, lag(yards_gained)),
+    lagged_shotgun_2 = ifelse(lag(defteam) != defteam, NA, lag(shotgun, 2)),
+    lagged_yds_2 = ifelse(lag(defteam) != defteam, NA, lag(yards_gained, 2)),
+    lagged_shotgun_3 = ifelse(lag(defteam) != defteam, NA, lag(shotgun, 3)),
+    lagged_yds_3 = ifelse(lag(defteam) != defteam, NA, lag(yards_gained, 3))
+  ) %>%
+  select(game_id, away_team, desc, play_type, shotgun, yards_gained, epa, lagged_shotgun, lagged_yds, lagged_shotgun_2, lagged_yds_2, lagged_shotgun_3, lagged_yds_3) %>%
+  #create category for non-shotgun play mixed into last 3 plays
+  mutate(
+    non_shotgun_last3 = as.factor(ifelse(((lagged_shotgun_3 == 0) | (lagged_shotgun == 0) | (lagged_shotgun_2 == 0)), 1, 0))
+  ) %>%
+  filter(!is.na(non_shotgun_last3) & !is.na(epa)) %>%
+  ggplot(aes(epa, color = non_shotgun_last3)) +
+  geom_density() + 
+  geom_vline(xintercept = 0) + 
+  labs(
+    title = "Running a non-shotgun play within Last 3 Plays Boosts EPA",
+    subtitle = "EPA is graphed for Play following L3",
+    caption = "2022 Data, Data: @nflfastr",
+    color = "Non-Shotgun Ran L3 Plays"
+  ) +
+  theme_classic()
+
+ggsave("2022ShotgunL3.png")
+  
+```
+
+Bengals ran shotgun in 3 consecutive plays 54% of the time last year, and was the highest average of shotgun/non-shotgun at 6.4 yards per play and 0.16 EPA
+
+Across the league, when teams ran shotgun twice then non-shotgun was the highest EPA but lower yards gained, presuming that the two shotgun plays set up a great EPA play (first down, shorter TD score)
+
+Running a non-shotgun play within your last 3 were much more effective via EPA, 0.015 epa vs -0.0075 epa and a p-value of 0.17, which accounts for the double in sample size that no shotgun for last 3 has (20k to 10k). And the graph shows it to be pretty agnostic of play type with identical graphs, but the red line (a non-shotgun play ran in last 3) edging the high EPA range of 2-5. 
+
+
+Big plays
+```{r}
+data2022 %>%
+  filter(posteam == "CIN") %>%
+  mutate(
+    lagged_shotgun = ifelse(lag(defteam) != defteam, NA, lag(shotgun)),
+    lagged_yds = ifelse(lag(defteam) != defteam, NA, lag(yards_gained)),
+    lagged_shotgun_2 = ifelse(lag(defteam) != defteam, NA, lag(shotgun, 2)),
+    lagged_yds_2 = ifelse(lag(defteam) != defteam, NA, lag(yards_gained, 2))
+  ) %>%
+  select(game_id, away_team, shotgun, yards_gained, epa, lagged_shotgun, lagged_yds, lagged_shotgun_2, lagged_yds_2) %>%
+  filter(yards_gained >= 15) %>%
+  group_by(shotgun, lagged_shotgun, lagged_shotgun_2) %>%
+  summarise(
+    count = n(),
+    yds_gained = mean(yards_gained),
+    epa = mean(epa)
+  ) %>%
+  arrange(-epa)
+
+data2022 %>%
+  mutate(
+    lagged_shotgun = ifelse(lag(defteam) != defteam, NA, lag(shotgun)),
+    lagged_yds = ifelse(lag(defteam) != defteam, NA, lag(yards_gained)),
+    lagged_shotgun_2 = ifelse(lag(defteam) != defteam, NA, lag(shotgun, 2)),
+    lagged_yds_2 = ifelse(lag(defteam) != defteam, NA, lag(yards_gained, 2))
+  ) %>%
+  select(game_id, away_team, shotgun, yards_gained, epa, lagged_shotgun, lagged_yds, lagged_shotgun_2, lagged_yds_2) %>%
+  filter(yards_gained >= 15) %>%
+  group_by(shotgun, lagged_shotgun, lagged_shotgun_2) %>%
+  summarise(
+    count = n(),
+    yds_gained = mean(yards_gained),
+    epa = mean(epa)
+  ) %>%
+  arrange(-epa)
+```
+For the entire league, when looking at plays that gained over 15 yards, the most effective EPA combination of plays was running a non-shotgun play within your previous 2 plays, then followed by a shotgun play, at a 2.25+ EPA on average. Not neccesarily an indicator of what makes the big plays, as it could've been based on the situation  
