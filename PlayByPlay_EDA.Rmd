@@ -78,4 +78,13 @@ ftndata2022 %>%
   ggplot(aes(n_blitzers, n_pass_rushers)) + 
   geom_point()
 ```
+```{r}
+data2022 <- nflreadr::load_pbp(2022) 
+ftndata2022 <- nflreadr::load_ftn_charting(2022)
+
+data2023 <- nflreadr::load_pbp(2023) 
+ftndata2023 <- nflreadr::load_ftn_charting(2023)
+
+data2022
+```
 

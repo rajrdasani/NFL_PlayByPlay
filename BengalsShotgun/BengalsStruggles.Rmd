@@ -385,3 +385,143 @@ data2022 %>%
   arrange(-epa)
 ```
 For the entire league, when looking at plays that gained over 15 yards, the most effective EPA combination of plays was running a non-shotgun play within your previous 2 plays, then followed by a shotgun play, at a 2.25+ EPA on average. Not neccesarily an indicator of what makes the big plays, as it could've been based on the situation  
+
+
+
+
+
+
+
+
+Week 5 Update after Bengals Win:
+
+```{r}
+data2023 <- nflreadr::load_pbp(2023) 
+ftndata2023 <- nflreadr::load_ftn_charting(2023)
+```
+
+
+```{r}
+#Filter out "no plays"
+data2023$no_play = ifelse(str_detect(data2023$desc, "No Play"), 1, 0)
+```
+
+```{r}
+data2023 = 
+  data2023 %>%
+  left_join(ftndata2023, by = c("game_id" = "nflverse_game_id", "play_id" = "nflverse_play_id")) %>%
+  #filter out plays where offensive team committed a penalty (no play)
+  filter(!(!is.na(penalty_team) & (penalty_team == posteam))) %>%
+  filter(no_play == 0) %>%
+  #filter out non-plays 
+  filter(play_type %in% c('pass', 'run'))
+
+```
+
+```{r}
+cin_week5 = data2023 %>%
+  left_join(ftndata2023, by = c("game_id" = "nflverse_game_id", "play_id" = "nflverse_play_id")) %>%
+  #filter for only weeks 1-4
+  filter(week.x %in% c(5)) %>%
+  #filter out plays where offensive team committed a penalty (no play)
+  filter(!(!is.na(penalty_team) & (penalty_team == posteam))) %>%
+  filter(no_play == 0) %>%
+  #filter out non-plays 
+  filter(play_type %in% c('pass', 'run')) %>%
+  #only CIN
+  filter(posteam == "CIN")
+
+cin_week5 %>%
+  group_by(shotgun) %>%
+  summarise(
+    count = n(), 
+    perc = n() / nrow(data2022 %>% filter(posteam == "CIN")),
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  )
+
+league = data2023 %>%
+  left_join(ftndata2023, by = c("game_id" = "nflverse_game_id", "play_id" = "nflverse_play_id")) %>%
+  #filter out plays where offensive team committed a penalty (no play)
+  filter(!(!is.na(penalty_team) & (penalty_team == posteam))) %>%
+  filter(no_play == 0) %>%
+  #filter out non-plays 
+  filter(play_type %in% c('pass', 'run'))
+
+league %>%
+  group_by(shotgun) %>%
+  summarise(
+    count = n(), 
+    perc = n() / nrow(data2022 %>% filter(posteam == "CIN")),
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  )
+```
+
+```{r}
+team_percshotgun_2023 = data2023 %>%
+  filter(week.x %in% c(5)) %>%
+  group_by(posteam, shotgun) %>%
+  summarise(
+    count = n(), 
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  ) %>%
+  group_by(posteam) %>%
+  mutate(Proportion = count / sum(count)) %>%
+  select(posteam, shotgun, Proportion) %>%
+  filter(shotgun == 1)
+
+
+
+team_epa_2023 = data2023 %>%
+  filter(week.x %in% c(5)) %>%
+  group_by(posteam) %>%
+  summarise(
+    count = n(), 
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  ) %>%
+  select(posteam, epa)
+
+
+team_percshotgun_2023 %>%
+  left_join(team_epa_2023) %>%
+  ggplot(aes(Proportion, epa)) +
+  geom_point(shape = NA) + 
+  #add points for the QBs with the logos (this uses nflplotR package)
+  geom_nfl_logos(aes(team_abbr = posteam), width = 0.05) + 
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Week 5 2023 Plays Ran in Shotgun vs Team Overall EPA",
+    subtitle = "Bengals Offense performs at league average, with nearly all Plays in Shotgun",
+    caption = "Raj Dasani | Data: @nflfastr",
+    x = "Proportion of Plays Ran in Shotgun",
+    y = "Team Overall EPA"
+  ) +
+  theme_classic()
+```
+
+```{r}
+ind_week5 = data2023 %>%
+  left_join(ftndata2023, by = c("game_id" = "nflverse_game_id", "play_id" = "nflverse_play_id")) %>%
+  #filter for only weeks 1-4
+  filter(week.x %in% c(5)) %>%
+  #filter out plays where offensive team committed a penalty (no play)
+  filter(!(!is.na(penalty_team) & (penalty_team == posteam))) %>%
+  filter(no_play == 0) %>%
+  #filter out non-plays 
+  filter(play_type %in% c('pass', 'run')) %>%
+  #only CIN
+  filter(posteam == "IND")
+
+ind_week5 %>%
+  group_by(shotgun) %>%
+  summarise(
+    count = n(), 
+    perc = n() / nrow(data2022 %>% filter(posteam == "CIN")),
+    yds = mean(yards_gained, na.rm = T),
+    epa = mean(epa, na.rm = T)
+  )
+```
+
